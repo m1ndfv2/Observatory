@@ -88,6 +88,7 @@ export class ConvertService {
 
     return {
       ...beatmapset,
+      source: beatmapset.source ?? "",
       beatmaps: beatmapset.beatmaps?.map(beatmap =>
         this.convertBanchoBeatmap(beatmap),
       ),
