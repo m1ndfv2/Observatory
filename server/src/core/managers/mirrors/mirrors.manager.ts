@@ -149,6 +149,21 @@ export class MirrorsManager {
   ): Promise<ResultWithStatus<Beatmapset[]>> {
     const criteria = ClientAbilities.SearchBeatmapsets;
 
+    if (config.UseBancho && !config.MirrorsToIgnore.includes("bancho")) {
+      const banchoClient = this.clients.find(client =>
+        client.client.clientConfig.baseUrl === "https://osu.ppy.sh"
+        && client.client.clientConfig.abilities.includes(criteria),
+      );
+
+      if (banchoClient) {
+        const result = await banchoClient.client.searchBeatmapsets(ctx);
+
+        if (result.result || result.status === 404) {
+          return result;
+        }
+      }
+    }
+
     return await this.useMirror<Beatmapset[]>(
       ctx,
       criteria,

@@ -41,4 +41,5 @@ export interface BanchoBeatmap extends Beatmap {
 
 export interface BanchoBeatmapsetSearchResult {
   beatmapsets: BanchoBeatmapset[];
+  cursor_string?: string;
 }
