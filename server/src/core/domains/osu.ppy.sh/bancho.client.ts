@@ -262,7 +262,7 @@ export class BanchoClient extends BaseClient {
           },
           params: {
             q: ctx.query,
-            m: ctx.mode,
+            m: this.normalizeBanchoMode(ctx.mode),
             s: status,
             cursor_string: cursorString,
           },
@@ -283,6 +283,12 @@ export class BanchoClient extends BaseClient {
     }
 
     return { result: beatmapsets, status: 200 };
+  }
+
+  private normalizeBanchoMode(mode: number | undefined): number | undefined {
+    return mode !== undefined && [0, 1, 2, 3].includes(mode)
+      ? mode
+      : undefined;
   }
 
   private rankStatusToBancho(status: RankStatusInt): string | undefined {
