@@ -140,7 +140,11 @@ export class BanchoClient extends BaseClient {
     ctx: SearchBeatmapsetsOptions,
   ): Promise<ResultWithStatus<Beatmapset[]>> {
     const statuses = ctx.status?.length
-      ? ctx.status.map(status => this.rankStatusToBancho(status))
+      ? [...new Set(
+          ctx.status
+            .map(status => this.rankStatusToBancho(status))
+            .filter(Boolean) as string[],
+        )]
       : [undefined];
 
     const limit = ctx.limit ?? 50;
@@ -281,7 +285,7 @@ export class BanchoClient extends BaseClient {
     return { result: beatmapsets, status: 200 };
   }
 
-  private rankStatusToBancho(status: RankStatusInt): string {
+  private rankStatusToBancho(status: RankStatusInt): string | undefined {
     switch (status) {
       case RankStatusInt.GRAVEYARD:
         return "graveyard";
@@ -292,13 +296,13 @@ export class BanchoClient extends BaseClient {
       case RankStatusInt.RANKED:
         return "ranked";
       case RankStatusInt.APPROVED:
-        return "approved";
+        return "ranked";
       case RankStatusInt.QUALIFIED:
         return "qualified";
       case RankStatusInt.LOVED:
         return "loved";
       default:
-        return "any";
+        return undefined;
     }
   }
 
