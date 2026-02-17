@@ -1,4 +1,5 @@
 import type { Beatmap, Beatmapset } from "../../../types/general/beatmap";
+import { RankStatusInt } from "../../../types/general/rankStatus";
 import logger from "../../../utils/logger";
 import { BaseClient } from "../../abstracts/client/base-client.abstract";
 import type {
@@ -8,6 +9,7 @@ import type {
   GetBeatmapsetsByBeatmapIdsOptions,
   GetBeatmapsOptions,
   ResultWithStatus,
+  SearchBeatmapsetsOptions,
 } from "../../abstracts/client/base-client.types";
 import {
   ClientAbilities,
@@ -28,6 +30,7 @@ export class BanchoClient extends BaseClient {
           ClientAbilities.GetBeatmaps,
           ClientAbilities.DownloadOsuBeatmap,
           ClientAbilities.GetBeatmapsetsByBeatmapIds,
+          ClientAbilities.SearchBeatmapsets,
         ],
       },
       {
@@ -39,6 +42,7 @@ export class BanchoClient extends BaseClient {
               ClientAbilities.GetBeatmaps,
               ClientAbilities.DownloadOsuBeatmap,
               ClientAbilities.GetBeatmapsetsByBeatmapIds,
+              ClientAbilities.SearchBeatmapsets,
             ],
             routes: ["/"],
             limit: 1200,
@@ -132,6 +136,46 @@ export class BanchoClient extends BaseClient {
     };
   }
 
+  async searchBeatmapsets(
+    ctx: SearchBeatmapsetsOptions,
+  ): Promise<ResultWithStatus<Beatmapset[]>> {
+    const statuses = ctx.status?.length
+      ? [...new Set(
+          ctx.status
+            .map(status => this.rankStatusToBancho(status))
+            .filter(Boolean) as string[],
+        )]
+      : [undefined];
+
+    const limit = ctx.limit ?? 50;
+    const offset = ctx.offset ?? 0;
+
+    const beatmapsets: BanchoBeatmapset[] = [];
+    for (const status of statuses) {
+      const result = await this.searchBeatmapsetsByStatus(ctx, status, {
+        limit,
+        offset,
+      });
+
+      if (result.status !== 200 || !result.result) {
+        return result;
+      }
+
+      beatmapsets.push(...result.result);
+    }
+
+    const uniqueBeatmapsets = [...new Map(
+      beatmapsets.map(beatmapset => [beatmapset.id, beatmapset]),
+    ).values()];
+
+    return {
+      result: uniqueBeatmapsets
+        .slice(offset, offset + limit)
+        .map(beatmapset => this.convertService.convertBeatmapset(beatmapset)),
+      status: 200,
+    };
+  }
+
   async downloadOsuBeatmap(
     ctx: DownloadOsuBeatmap,
   ): Promise<ResultWithStatus<ArrayBuffer>> {
@@ -197,6 +241,69 @@ export class BanchoClient extends BaseClient {
       result: this.convertService.convertBeatmap(result.data),
       status: result.status,
     };
+  }
+
+  private async searchBeatmapsetsByStatus(
+    ctx: SearchBeatmapsetsOptions,
+    status: string | undefined,
+    pagination: { limit: number; offset: number },
+  ): Promise<ResultWithStatus<BanchoBeatmapset[]>> {
+    let cursorString: string | undefined;
+    const beatmapsets: BanchoBeatmapset[] = [];
+
+    while (beatmapsets.length < pagination.offset + pagination.limit) {
+      const result = await this.api.get<{
+        beatmapsets: BanchoBeatmapset[];
+        cursor_string?: string;
+      }>("api/v2/beatmapsets/search", {
+        config: {
+          headers: {
+            Authorization: `Bearer ${await this.osuApiKey}`,
+          },
+          params: {
+            q: ctx.query,
+            m: ctx.mode,
+            s: status,
+            cursor_string: cursorString,
+          },
+        },
+      });
+
+      if (!result || result.status !== 200 || !result.data) {
+        return { result: null, status: result?.status ?? 500 };
+      }
+
+      beatmapsets.push(...result.data.beatmapsets);
+
+      if (!result.data.cursor_string) {
+        break;
+      }
+
+      cursorString = result.data.cursor_string;
+    }
+
+    return { result: beatmapsets, status: 200 };
+  }
+
+  private rankStatusToBancho(status: RankStatusInt): string | undefined {
+    switch (status) {
+      case RankStatusInt.GRAVEYARD:
+        return "graveyard";
+      case RankStatusInt.WIP:
+        return "wip";
+      case RankStatusInt.PENDING:
+        return "pending";
+      case RankStatusInt.RANKED:
+        return "ranked";
+      case RankStatusInt.APPROVED:
+        return "ranked";
+      case RankStatusInt.QUALIFIED:
+        return "qualified";
+      case RankStatusInt.LOVED:
+        return "loved";
+      default:
+        return undefined;
+    }
   }
 
   private get osuApiKey() {
